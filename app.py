@@ -1,5 +1,4 @@
 """
-<<<<<<< HEAD
 PDF Tools Backend — iLovePDF Clone (9 Features)
 ================================================
 Original 5:
@@ -34,38 +33,6 @@ pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tessera
 import cv2
 import numpy as np
 
-=======
-PDF Tools Backend - iLovePDF Clone (Top 5 Features)
-=====================================================
-Features implemented:
-  1. Merge PDF       - Combine multiple PDFs into one
-  2. Split PDF       - Split PDF into individual pages or page ranges
-  3. Compress PDF    - Reduce PDF file size via Ghostscript / pikepdf
-  4. PDF to Word     - Convert PDF to .docx (via pdf2docx)
-  5. PDF to PowerPoint - Convert PDF pages to .pptx (via pdf2image + python-pptx)
-"""
-
-import os
-import io
-import uuid
-import zipfile
-import shutil
-import subprocess
-import tempfile
-import logging
-from pathlib import Path
-from flask import Flask, request, jsonify, send_file, after_this_request
-
-# ── PDF libraries ────────────────────────────────────────────────────────────
-from pypdf import PdfReader, PdfWriter
-import pikepdf
-from pdf2docx import Converter
-from pdf2image import convert_from_path
-from pptx import Presentation
-from pptx.util import Inches, Pt
-
-# ── App setup ────────────────────────────────────────────────────────────────
->>>>>>> b37428719113e6ba4469ce50fb981c0a35b4f255
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
 log = logging.getLogger(__name__)
 
