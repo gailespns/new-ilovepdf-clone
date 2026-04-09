@@ -73,20 +73,34 @@ def _pdf_page_count(path):
     return len(PdfReader(str(path)).pages)
 
 def _parse_page_ranges(s, total):
-    s = s.strip().lower()
-    if not s or s == "each": return [[i] for i in range(total)]
-    if s == "all": return [list(range(total))]
+    s = (s or "").strip().lower()
+
+    if not s or s == "each":
+        return [[i] for i in range(total)]
+    if s == "all":
+        return [list(range(total))]
+
     groups = []
     for part in s.split(","):
         part = part.strip()
-        if not part: continue
-        if "-" in part:
-            lo, hi = part.split("-", 1)
-            lo, hi = max(0, int(lo)-1), min(total-1, int(hi)-1)
-            if lo <= hi: groups.append(list(range(lo, hi+1)))
-        else:
-            idx = int(part) - 1
-            if 0 <= idx < total: groups.append([idx])
+        if not part:
+            continue
+        try:
+            if "-" in part:
+                lo, hi = part.split("-", 1)
+                lo = int(lo.strip())
+                hi = int(hi.strip())
+                lo = max(1, lo)
+                hi = min(total, hi)
+                if lo <= hi:
+                    groups.append(list(range(lo - 1, hi)))
+            else:
+                idx = int(part.strip())
+                if 1 <= idx <= total:
+                    groups.append([idx - 1])
+        except Exception:
+            log.warning("Invalid range ignored: %s", part)
+
     return groups
 
 def _libreoffice_convert(input_path, fmt):
@@ -156,26 +170,6 @@ def merge_pdf():
 
 @app.route("/api/split", methods=["POST"])
 def split_pdf():
-    """
-    Endpoint: POST /api/split
-    Body    : multipart/form-data
-      file   – PDF to split
-      ranges – (optional) comma-separated page ranges, e.g. "1-3,5,7-9"
-               "each" or empty → one PDF per page  (default)
-               "all"           → returns the whole PDF as a single output
-
-    Returns : zip archive containing the split PDFs when more than one
-              output is produced, otherwise a single PDF.
-
-    Algorithm
-    ---------
-    1. Parse the 'ranges' field into groups of 0-based page indices using
-       _parse_page_ranges().
-    2. For every group, open a fresh PdfWriter, add the requested pages,
-       and write to a temp file.
-    3. If only one group → stream it directly.
-       If multiple groups → bundle them into a zip and stream that.
-    """
     f = request.files.get("file")
     if not f:
         return jsonify(error="No file provided."), 400
@@ -184,7 +178,7 @@ def split_pdf():
 
     ranges_str = request.form.get("ranges", "each")
     input_path = _save_upload(f)
-    output_paths: list[Path] = []
+    output_paths = []
 
     try:
         reader = PdfReader(str(input_path))
@@ -204,23 +198,22 @@ def split_pdf():
             with open(out, "wb") as fh:
                 writer.write(fh)
             output_paths.append(out)
-            log.info("  Part %d/%d: pages %s → %s (%.1f KB)",
-                     idx + 1, len(groups),
-                     [p + 1 for p in page_indices],
-                     out.name, out.stat().st_size / 1024)
+
+            log.info(
+                "Part %d/%d: pages %s",
+                idx + 1,
+                len(groups),
+                [p + 1 for p in page_indices]
+            )
 
         if len(output_paths) == 1:
-            out = output_paths[0]
             stem = Path(f.filename).stem
-            return _send(out, f"{stem}_split.pdf", "application/pdf")
+            return _send(output_paths[0], f"{stem}_split.pdf", "application/pdf")
 
-        # Pack into a zip
         zip_path = _out(".zip")
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for i, p in enumerate(output_paths, 1):
                 zf.write(p, f"page_{i:03d}.pdf")
-
-        return _send(zip_path, "split_pages.zip", "application/zip")
 
         @after_this_request
         def _cleanup(response):
@@ -229,12 +222,10 @@ def split_pdf():
                     p.unlink(missing_ok=True)
                 except Exception:
                     pass
-
             try:
                 zip_path.unlink(missing_ok=True)
             except Exception:
                 pass
-
             return response
 
         return send_file(
@@ -243,6 +234,10 @@ def split_pdf():
             download_name="split_pages.zip",
             mimetype="application/zip",
         )
+
+    except Exception as e:
+        log.exception("Split error")
+        return jsonify(error=str(e)), 500
 
     finally:
         input_path.unlink(missing_ok=True)
