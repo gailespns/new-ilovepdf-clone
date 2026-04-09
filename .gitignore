@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.env
+*.log
+
+# temp files
+pdf_tools_uploads/
+pdf_tools_outputs/
+
+# OS
+.DS_Store
+Thumbs.db
