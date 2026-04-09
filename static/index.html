@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF Tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f7f6f3;
+    --surface: #ffffff;
+    --border: #e2e0d8;
+    --text: #1a1916;
+    --muted: #888580;
+    --accent: #1a1916;
+    --green: #166534;
+    --green-bg: #dcfce7;
+    --red: #991b1b;
+    --red-bg: #fee2e2;
+    --blue: #1d4ed8;
+    --blue-bg: #dbeafe;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+  }
+  .logo {
+    font-family: var(--mono);
+    font-size: 0.95rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+  .logo span { color: var(--muted); }
+  #health-bar {
+    display: flex;
+    gap: 16px;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+  }
+  .svc { display: flex; align-items: center; gap: 5px; color: var(--muted); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: #d1d5db; flex-shrink: 0; }
+  .dot.ok  { background: #22c55e; }
+  .dot.err { background: #ef4444; }
+
+  /* ── Main ── */
+  main { max-width: 1100px; margin: 0 auto; padding: 48px 32px 80px; }
+
+  .page-title {
+    font-family: var(--mono);
+    font-size: 1.6rem;
+    font-weight: 500;
+    letter-spacing: -0.03em;
+    margin-bottom: 6px;
+  }
+  .page-sub {
+    font-size: 0.9rem;
+    color: var(--muted);
+    margin-bottom: 40px;
+  }
+
+  /* ── Tool grid ── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: visible;
+    background: var(--bg);
+  }
+
+  .tool-card {
+    background: var(--surface);
+    cursor: pointer;
+    transition: background 0.2s;
+    position: relative;
+    border-radius: 0;
+  }
+  .tool-card:hover { background: #faf9f7; }
+  .tool-card.open  { background: var(--surface); z-index: 10; }
+
+  .tool-header {
+    padding: 20px 22px 18px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .tool-meta { flex: 1; min-width: 0; }
+  .tool-num {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .tool-name {
+    font-size: 0.95rem;
+    font-weight: 500;
+    line-height: 1.3;
+  }
+  .tool-desc {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 3px;
+    line-height: 1.4;
+  }
+  .tool-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+    background: var(--bg);
+  }
+  .chevron {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    opacity: 0.3;
+    transition: transform 0.2s, opacity 0.15s;
+    margin-top: 2px;
+  }
+  .tool-card.open .chevron { transform: rotate(180deg); opacity: 0.6; }
+
+  /* ── Expanded form ── */
+  .tool-body {
+    position: absolute;
+    top: 100%;
+    left: -1px;
+    right: -1px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+    padding: 0 22px;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: max-height 0.32s ease, padding-bottom 0.32s ease, opacity 0.22s ease;
+    z-index: 10;
+  }
+  .tool-card.open .tool-body {
+    max-height: 600px;
+    padding: 0 22px 20px;
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .tool-body * { pointer-events: auto; }
+
+  .field { margin-top: 14px; }
+  .field label {
+    display: block;
+    font-size: 0.72rem;
+    font-family: var(--mono);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 5px;
+  }
+  .field input[type=file],
+  .field input[type=text],
+  .field input[type=number],
+  .field select {
+    width: 100%;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.1s;
+  }
+  .field input:focus,
+  .field select:focus { border-color: #9ca3af; }
+  .field input[type=file] { cursor: pointer; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .run-btn {
+    margin-top: 16px;
+    width: 100%;
+    padding: 8px 16px;
+    background: var(--text);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: opacity 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .run-btn:hover { opacity: 0.8; }
+  .run-btn:active { opacity: 0.6; }
+
+  .status {
+    margin-top: 10px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    display: none;
+    line-height: 1.5;
+  }
+  .status.info { background: var(--blue-bg); color: var(--blue); display: block; }
+  .status.ok   { background: var(--green-bg); color: var(--green); display: block; }
+  .status.err  { background: var(--red-bg); color: var(--red); display: block; }
+
+  /* ── Info card (special, full-width) ── */
+  .tool-card.info-card { grid-column: 1 / -1; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">pdf<span>/</span>tools</div>
+  <div id="health-bar">
+    <div class="svc"><div class="dot" id="dot-gs"></div><span>ghostscript</span></div>
+    <div class="svc"><div class="dot" id="dot-pp"></div><span>pdftoppm</span></div>
+    <div class="svc"><div class="dot" id="dot-lo"></div><span>libreoffice</span></div>
+  </div>
+</header>
+
+<main>
+  <h1 class="page-title">PDF Tools</h1>
+  <p class="page-sub">9 tools. All local. No uploads to third parties.</p>
+
+  <div class="grid">
+
+    <!-- 1. Merge -->
+    <div class="tool-card" onclick="toggle(this)">
+      <div class="tool-header">
+        <div class="tool-meta">
+          <div class="tool-num">01</div>
+          <div class="tool-name">Merge PDF</div>
+          <div class="tool-desc">Combine multiple PDFs into one</div>
+        </div>
+        <div class="tool-icon">⊕</div>
+        <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6l4 4 4-4"/></svg>
+      </div>
+      <div class="tool-body" onclick="event.stopPropagation()">
+        <div class="field">
+          <label>PDF files (select 2 or more)</label>
+          <input type="file" id="merge-files" accept=".pdf" multiple>
+        </div>
+        <button class="run-btn" onclick="event.stopPropagation(); mergePDF()">
+          <span>Merge files</span>
+        </button>
+        <div class="status" id="merge-status"></div>
+      </div>
+    </div>
+
+    <!-- 2. Split -->
+    <div class="tool-card" onclick="toggle(this)">
+      <div class="tool-header">
+        <div class="tool-meta">
+          <div class="tool-num">02</div>
+          <div class="tool-name">Split PDF</div>
+          <div class="tool-desc">Extract pages or custom ranges</div>
+        </div>
+        <div class="tool-icon">⊘</div>
+        <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6l4 4 4-4"/></svg>
+      </div>
+      <div class="tool-body" onclick="event.stopPropagation()">
+        <div class="field">
+          <label>PDF file</label>
+          <input type="file" id="split-file" accept=".pdf">
+        </div>
+        <div class="field">
+          <label>Page ranges</label>
+          <input type="text" id="split-ranges" value="each" placeholder='"each" | "all" | 1-3,5,7-9'>
+        </div>
+        <button class="run-btn" onclick="event.stopPropagation(); splitPDF()">Split</button>
+        <div class="status" id="split-status"></div>
+      </div>
+    </div>
+
+    <!-- 3. Compress -->
+    <div class="tool-card" onclick="toggle(this)">
+      <div class="tool-header">
+        <div class="tool-meta">
+          <div class="tool-num">03</div>
+          <div class="tool-name">Compress PDF</div>
+          <div class="tool-desc">Reduce file size, choose quality</div>
+        </div>
+        <div class="tool-icon">↓</div>
+        <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6l4 4 4-4"/></svg>
+      </div>
+      <div class="tool-body" onclick="event.stopPropagation()">
+        <div class="field">
+          <label>PDF file</label>
+          <input type="file" id="compress-file" accept=".pdf">
+        </div>
+        <div class="field">
+          <label>Quality</label>
+          <select id="compress-quality">
+            <option value="screen">screen — ~72 dpi, smallest</option>
+            <option value="ebook" selected>ebook — ~150 dpi, balanced</option>
+            <option value="printer">printer — ~300 dpi, high quality</option>
+            <option value="prepress">prepress — ~300 dpi + colour</option>
+          </select>
+        </div>
+        <button class="run-btn" onclick="event.stopPropagation(); compressPDF()">Compress</button>
+        <div class="status" id="compress-status"></div>
+      </div>
+    </div>
+
+    <!-- 4. PDF → Word -->
+    <div class="tool-card" onclick="toggle(this)">
+      <div class="tool-header">
+        <div class="tool-meta">
+          <div class="tool-num">04</div>
+          <div class="tool-name">PDF → Word</div>
+          <div class="tool-desc">Convert to editable .docx</div>
+        </div>
+        <div class="tool-icon">W</div>
+        <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6l4 4 4-4"/></svg>
+      </div>
+      <div class="tool-body" onclick="event.stopPropagation()">
+        <div class="field">
+          <label>PDF file</label>
+          <input type="file" id="word-file" accept=".pdf">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Start page</label>
+            <input type="number" id="word-start" value="1" min="1">
+          </div>
+          <div class="field">
+            <label>End page (0 = last)</label>
+            <input type="number" id="word-end" value="0" min="0">
+          </div>
+        </div>
+        <button class="run-btn" onclick="event.stopPropagation(); pdfToWord()">Convert to Word</button>
+        <div class="status" id="word-status"></div>
+      </div>
+    </div>
+
+    <!-- 5. PDF → PPTX -->
+    <div class="tool-card" onclick="toggle(this)">
+      <div class="tool-header">
+        <div class="tool-meta">
+          <div class="tool-num">05</div>
+          <div class="tool-name">PDF → PowerPoint</div>
+          <div class="tool-desc">Each page becomes a slide</div>
+        </div>
+        <div class="tool-icon">P</div>
+        <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6l4 4 4-4"/></svg>
+      </div>
+      <div class="tool-body" onclick="event.stopPropagation()">
+        <div class="field">
+          <label>PDF file</label>
+          <input type="file" id="pptx-file" accept=".pdf">
+        </div>
+        <div class="field">
+          <label>Render DPI (72 – 300)</label>
+          <input type="number" id="pptx-dpi" value="150" min="72" max="300">
+        </div>
+        <button class="run-btn" onclick="event.stopPropagation(); pdfToPPTX()">Convert to PPTX</button>
+        <div class="status" id="pptx-status"></div>
+      </div>
+    </div>
+
+    <!-- 6. PDF → Excel -->
+    <div class="tool-card" onclick="toggle(this)">
+      <div class="tool-header">
+        <div class="tool-meta">
+          <div class="tool-num">06</div>
+          <div class="tool-name">PDF → Excel</div>
+          <div class="tool-desc">Extract tables to .xlsx</div>
+        </div>
+        <div class="tool-icon">X</div>
+        <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6l4 4 4-4"/></svg>
+      </div>
+      <div class="tool-body" onclick="event.stopPropagation()">
+        <div class="field">
+          <label>PDF file</label>
+          <input type="file" id="excel-file" accept=".pdf">
+        </div>
+        <button class="run-btn" onclick="event.stopPropagation(); pdfToExcel()">Extract tables</button>
+        <div class="status" id="excel-status"></div>
+      </div>
+    </div>
+
+    <!-- 7. Word → PDF -->
+    <div class="tool-card" onclick="toggle(this)">
+      <div class="tool-header">
+        <div class="tool-meta">
+          <div class="tool-num">07</div>
+          <div class="tool-name">Word → PDF</div>
+          <div class="tool-desc">Convert .doc / .docx to PDF</div>
+        </div>
+        <div class="tool-icon">W</div>
+        <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6l4 4 4-4"/></svg>
+      </div>
+      <div class="tool-body" onclick="event.stopPropagation()">
+        <div class="field">
+          <label>.doc / .docx file</label>
+          <input type="file" id="w2p-file" accept=".doc,.docx">
+        </div>
+        <button class="run-btn" onclick="event.stopPropagation(); wordToPDF()">Convert to PDF</button>
+        <div class="status" id="w2p-status"></div>
+      </div>
+    </div>
+
+    <!-- 8. PPTX → PDF -->
+    <div class="tool-card" onclick="toggle(this)">
+      <div class="tool-header">
+        <div class="tool-meta">
+          <div class="tool-num">08</div>
+          <div class="tool-name">PowerPoint → PDF</div>
+          <div class="tool-desc">Convert .ppt / .pptx to PDF</div>
+        </div>
+        <div class="tool-icon">P</div>
+        <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6l4 4 4-4"/></svg>
+      </div>
+      <div class="tool-body" onclick="event.stopPropagation()">
+        <div class="field">
+          <label>.ppt / .pptx file</label>
+          <input type="file" id="p2p-file" accept=".ppt,.pptx">
+        </div>
+        <button class="run-btn" onclick="event.stopPropagation(); pptxToPDF()">Convert to PDF</button>
+        <div class="status" id="p2p-status"></div>
+      </div>
+    </div>
+
+    <!-- 9. Excel → PDF -->
+    <div class="tool-card" onclick="toggle(this)">
+      <div class="tool-header">
+        <div class="tool-meta">
+          <div class="tool-num">09</div>
+          <div class="tool-name">Excel → PDF</div>
+          <div class="tool-desc">Convert .xls / .xlsx to PDF</div>
+        </div>
+        <div class="tool-icon">X</div>
+        <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6l4 4 4-4"/></svg>
+      </div>
+      <div class="tool-body" onclick="event.stopPropagation()">
+        <div class="field">
+          <label>.xls / .xlsx file</label>
+          <input type="file" id="e2p-file" accept=".xls,.xlsx">
+        </div>
+        <button class="run-btn" onclick="event.stopPropagation(); excelToPDF()">Convert to PDF</button>
+        <div class="status" id="e2p-status"></div>
+      </div>
+    </div>
+
+    <!-- Info (full-width) -->
+    <div class="tool-card info-card" onclick="toggle(this)">
+      <div class="tool-header">
+        <div class="tool-meta">
+          <div class="tool-num">—</div>
+          <div class="tool-name">PDF Info</div>
+          <div class="tool-desc">Inspect metadata: page count, title, author, encryption</div>
+        </div>
+        <div class="tool-icon">i</div>
+        <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6l4 4 4-4"/></svg>
+      </div>
+      <div class="tool-body" onclick="event.stopPropagation()">
+        <div class="field">
+          <label>PDF file</label>
+          <input type="file" id="info-file" accept=".pdf">
+        </div>
+        <button class="run-btn" onclick="event.stopPropagation(); pdfInfo()">Inspect</button>
+        <div class="status" id="info-status"></div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+// Health check
+(async () => {
+  try {
+    const d = await (await fetch('/api/health')).json();
+    const set = (id, ok) => document.getElementById(id).className = 'dot ' + (ok ? 'ok' : 'err');
+    set('dot-gs', d.ghostscript);
+    set('dot-pp', d.pdftoppm);
+    set('dot-lo', d.libreoffice);
+  } catch(e) {}
+})();
+
+// Toggle card open/close
+function toggle(card) {
+  const wasOpen = card.classList.contains('open');
+  document.querySelectorAll('.tool-card.open').forEach(c => c.classList.remove('open'));
+  if (!wasOpen) card.classList.add('open');
+}
+
+// Status helper
+function setStatus(id, cls, msg) {
+  const el = document.getElementById(id);
+  el.className = 'status ' + cls;
+  el.textContent = msg;
+  el.style.whiteSpace = 'normal';
+}
+
+// Generic POST + download
+async function post(url, fd, sid, fname) {
+  setStatus(sid, 'info', 'Processing...');
+  try {
+    const r = await fetch(url, { method: 'POST', body: fd });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({ error: r.statusText }));
+      setStatus(sid, 'err', 'Error: ' + e.error);
+      return;
+    }
+    const blob = await r.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const cd = r.headers.get('Content-Disposition') || '';
+    const m = cd.match(/filename="?([^";\n]+)"?/);
+    a.download = m ? m[1] : fname;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    setStatus(sid, 'ok', 'Done — file downloaded');
+  } catch(e) {
+    setStatus(sid, 'err', 'Error: ' + e.message);
+  }
+}
+
+async function mergePDF() {
+  const inp = document.getElementById('merge-files');
+  if (inp.files.length < 2) { setStatus('merge-status','err','Select at least 2 PDFs'); return; }
+  const fd = new FormData();
+  for (const f of inp.files) fd.append('files[]', f);
+  await post('/api/merge', fd, 'merge-status', 'merged.pdf');
+}
+async function splitPDF() {
+  const f = document.getElementById('split-file').files[0];
+  if (!f) { setStatus('split-status','err','Select a PDF'); return; }
+  const fd = new FormData(); fd.append('file', f); fd.append('ranges', document.getElementById('split-ranges').value);
+  await post('/api/split', fd, 'split-status', 'split_pages.zip');
+}
+async function compressPDF() {
+  const f = document.getElementById('compress-file').files[0];
+  if (!f) { setStatus('compress-status','err','Select a PDF'); return; }
+  const fd = new FormData(); fd.append('file', f); fd.append('quality', document.getElementById('compress-quality').value);
+  await post('/api/compress', fd, 'compress-status', 'compressed.pdf');
+}
+async function pdfToWord() {
+  const f = document.getElementById('word-file').files[0];
+  if (!f) { setStatus('word-status','err','Select a PDF'); return; }
+  const fd = new FormData(); fd.append('file', f);
+  fd.append('start_page', document.getElementById('word-start').value);
+  const e = document.getElementById('word-end').value; if (e > 0) fd.append('end_page', e);
+  await post('/api/pdf-to-word', fd, 'word-status', 'output.docx');
+}
+async function pdfToPPTX() {
+  const f = document.getElementById('pptx-file').files[0];
+  if (!f) { setStatus('pptx-status','err','Select a PDF'); return; }
+  const fd = new FormData(); fd.append('file', f); fd.append('dpi', document.getElementById('pptx-dpi').value);
+  await post('/api/pdf-to-pptx', fd, 'pptx-status', 'output.pptx');
+}
+async function pdfToExcel() {
+  const f = document.getElementById('excel-file').files[0];
+  if (!f) { setStatus('excel-status','err','Select a PDF'); return; }
+  const fd = new FormData(); fd.append('file', f);
+  await post('/api/pdf-to-excel', fd, 'excel-status', 'output.xlsx');
+}
+async function wordToPDF() {
+  const f = document.getElementById('w2p-file').files[0];
+  if (!f) { setStatus('w2p-status','err','Select a Word file'); return; }
+  const fd = new FormData(); fd.append('file', f);
+  await post('/api/word-to-pdf', fd, 'w2p-status', 'output.pdf');
+}
+async function pptxToPDF() {
+  const f = document.getElementById('p2p-file').files[0];
+  if (!f) { setStatus('p2p-status','err','Select a PowerPoint file'); return; }
+  const fd = new FormData(); fd.append('file', f);
+  await post('/api/pptx-to-pdf', fd, 'p2p-status', 'output.pdf');
+}
+async function excelToPDF() {
+  const f = document.getElementById('e2p-file').files[0];
+  if (!f) { setStatus('e2p-status','err','Select an Excel file'); return; }
+  const fd = new FormData(); fd.append('file', f);
+  await post('/api/excel-to-pdf', fd, 'e2p-status', 'output.pdf');
+}
+async function pdfInfo() {
+  const f = document.getElementById('info-file').files[0];
+  if (!f) { setStatus('info-status','err','Select a PDF'); return; }
+  setStatus('info-status','info','Reading...');
+  const fd = new FormData(); fd.append('file', f);
+  try {
+    const d = await (await fetch('/api/info',{method:'POST',body:fd})).json();
+    const lines = [
+      'pages:     ' + d.pages,
+      'size:      ' + d.file_size_kb + ' KB',
+      'title:     ' + (d.title  || '—'),
+      'author:    ' + (d.author || '—'),
+      'creator:   ' + (d.creator|| '—'),
+      'encrypted: ' + d.encrypted,
+    ];
+    setStatus('info-status','ok', lines.join('\n'));
+    document.getElementById('info-status').style.whiteSpace = 'pre';
+  } catch(e) { setStatus('info-status','err','Error: '+e.message); }
+}
+</script>
+</body>
+</html> 
