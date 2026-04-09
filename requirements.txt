@@ -1,0 +1,11 @@
+# PDF Tools Backend — Python dependencies
+# Install: pip install -r requirements.txt
+# System deps (apt): ghostscript poppler-utils
+
+flask>=3.0
+pypdf>=4.0           # merge, split, rotate, encrypt
+pikepdf>=8.0         # compress (lossless fallback)
+pdf2docx>=0.5.8      # PDF → Word (uses PyMuPDF internally)
+pdf2image>=1.17      # PDF → images (uses poppler pdftoppm)
+python-pptx>=1.0     # build PPTX from images
+Pillow>=10.0         # image manipulation (required by pdf2image)
