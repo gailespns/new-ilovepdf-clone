@@ -525,27 +525,72 @@ function setStatus(id, cls, msg) {
 }
 
 // Generic POST + download
+// Generic POST + download (MOBILE FIXED)
 async function post(url, fd, sid, fname) {
   setStatus(sid, 'info', 'Processing...');
+
   try {
     const r = await fetch(url, { method: 'POST', body: fd });
+
     if (!r.ok) {
       const e = await r.json().catch(() => ({ error: r.statusText }));
-      setStatus(sid, 'err', 'Error: ' + e.error);
+      setStatus(sid, 'err', 'Error: ' + (e.error || 'Request failed'));
       return;
     }
+
     const blob = await r.blob();
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
+
     const cd = r.headers.get('Content-Disposition') || '';
-    const m = cd.match(/filename="?([^";\n]+)"?/);
-    a.download = m ? m[1] : fname;
-    a.click();
-    URL.revokeObjectURL(a.href);
-    setStatus(sid, 'ok', 'Done — file downloaded');
-  } catch(e) {
+    const match = cd.match(/filename\*?=(?:UTF-8'')?"?([^";\n]+)"?/i);
+    const fileName = match ? decodeURIComponent(match[1]) : fname;
+
+    await downloadResult(blob, fileName, sid);
+
+  } catch (e) {
     setStatus(sid, 'err', 'Error: ' + e.message);
   }
+}
+
+async function downloadResult(blob, fileName, sid) {
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  // ✅ Mobile-first: use Share API (works great on iOS + Android)
+  if (isMobile && navigator.canShare && navigator.share) {
+    try {
+      const file = new File([blob], fileName, {
+        type: blob.type || 'application/octet-stream'
+      });
+
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: fileName
+        });
+
+        setStatus(sid, 'ok', 'Done — tap to save/share your file');
+        return;
+      }
+    } catch (err) {
+      console.warn('Share failed, falling back:', err);
+    }
+  }
+
+  // ✅ Fallback (desktop + unsupported mobile)
+  const objectUrl = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = objectUrl;
+  a.download = fileName;
+  a.style.display = 'none';
+
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  // ❗ important: delay revoke (fixes mobile issues)
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
+
+  setStatus(sid, 'ok', 'Done — file downloaded');
 }
 
 async function mergePDF() {
